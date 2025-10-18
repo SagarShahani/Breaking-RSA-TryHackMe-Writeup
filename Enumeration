@@ -1,0 +1,23 @@
+# TryHackMe – Breaking RSA Walkthrough
+
+## Overview
+This repository contains a step-by-step walkthrough of the **“Breaking RSA”** room on TryHackMe. The goal of this room is to understand RSA cryptography, identify weak key generation, and exploit the vulnerability to retrieve the root flag.
+
+The walkthrough demonstrates:
+- Scanning the target machine using **Nmap**.
+- Discovering hidden directories on the web server.
+- Retrieving an exposed SSH public key.
+- Using **Fermat's Factorization** to break RSA when primes are close.
+- Generating the corresponding **SSH private key**.
+- Logging in via SSH to retrieve the root flag.
+
+> ⚠️ **Important:** Private keys in this repo are for educational purposes only. Do **not** use them on real systems.
+
+---
+
+## Step-by-Step Walkthrough
+
+### 1. Nmap Scan
+Scan the target machine to identify open services:
+```bash
+nmap -sV -Pn <Your_IP> -oN nmap_services.txt
