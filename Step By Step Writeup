@@ -124,6 +124,13 @@ ssh -i ssh_private_key.pem -o StrictHostKeyChecking=no root@<Your_IP> "cat /root
 # or for debugging
 ssh -i ssh_private_key.pem -o StrictHostKeyChecking=no -vvv root@<Your_IP>
 
+
+Warning: Permanently added '************' (ED25519) to the list of known hosts.
+root
+uid=0(root) gid=0(root) groups=0(root)
+brea********{Reducted}**********
+
+
 💥BOOM You obtained the flag. 
 
 #That's It It's Very Easy 🙂😶‍🌫️
